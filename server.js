@@ -7,72 +7,92 @@ const path = require('path');
 const app = express();
 app.use(bodyParser.json());
 
-// Serve your frontend files
-app.use(express.static(path.join(__dirname))); // serves index.html and any other files in the same folder
+// Serve frontend files (index.html etc.)
+app.use(express.static(path.join(__dirname)));
 
-// Store codes in memory (demo)
+// Store codes in memory (for demo)
 const codes = new Map();
 
+// Generate 6-digit OTP
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function sendOtpEmail(to, code) {
-  const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+// Create transporter for sending emails
+// ✅ Gmail Example
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: false, // must be false for port 587
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  }
+    pass: process.env.SMTP_PASS,
+  },
 });
 
-  return transporter.sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to,
-    subject: 'Your verification code',
-    text: `Your verification code is: ${code}. It expires in 5 minutes.`
-  });
+// Optional: SendGrid Example (uncomment if using SendGrid)
+/*
+const transporter = nodemailer.createTransport({
+  service: 'SendGrid',
+  auth: {
+    user: 'apikey',
+    pass: process.env.SENDGRID_API_KEY
+  }
+});
+*/
+
+async function sendOtpEmail(to, code) {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      to,
+      subject: 'Your verification code',
+      text: `Your verification code is: ${code}. It expires in 5 minutes.`,
+    });
+    console.log('Email sent:', info.messageId);
+    return info;
+  } catch (err) {
+    console.error('Failed to send email:', err);
+    throw err;
+  }
 }
 
-// Send code endpoint
+// Send OTP endpoint
 app.post('/send-code', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ ok: false, message: 'Email required' });
 
   const code = generateCode();
-  const expires = Date.now() + 5*60*1000; // 5 min
+  const expires = Date.now() + 5 * 60 * 1000; // 5 minutes
   codes.set(email, { code, expires });
 
   try {
     await sendOtpEmail(email, code);
     res.json({ ok: true, message: 'Code sent' });
-  } catch(err) {
-    console.error(err);
-    res.status(500).json({ ok:false, message:'Failed to send code' });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: 'Failed to send code' });
   }
 });
 
-// Verify code endpoint
-app.post('/verify-code', (req,res) => {
+// Verify OTP endpoint
+app.post('/verify-code', (req, res) => {
   const { email, code } = req.body;
-  if (!email || !code) return res.status(400).json({ ok:false, message:'Email and code required' });
+  if (!email || !code) return res.status(400).json({ ok: false, message: 'Email and code required' });
 
   const record = codes.get(email);
-  if (!record) return res.status(400).json({ ok:false, message:'No code sent for this email' });
+  if (!record) return res.status(400).json({ ok: false, message: 'No code sent for this email' });
 
   if (Date.now() > record.expires) {
     codes.delete(email);
-    return res.status(400).json({ ok:false, message:'Code expired' });
+    return res.status(400).json({ ok: false, message: 'Code expired' });
   }
 
-  if (record.code !== code) return res.status(400).json({ ok:false, message:'Invalid code' });
+  if (record.code !== code) return res.status(400).json({ ok: false, message: 'Invalid code' });
 
   codes.delete(email);
-  res.json({ ok:true, message:'Verified' });
+  res.json({ ok: true, message: 'Verified' });
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
