@@ -1,4 +1,3 @@
-require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
@@ -10,7 +9,7 @@ app.use(bodyParser.json());
 // Serve frontend files (index.html etc.)
 app.use(express.static(path.join(__dirname)));
 
-// Store codes in memory (for demo)
+// Store OTP codes in memory (for demo)
 const codes = new Map();
 
 // Generate 6-digit OTP
@@ -18,29 +17,18 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Create transporter for sending emails
-// ✅ Gmail Example
+// Create transporter using Render environment variables
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: Number(process.env.SMTP_PORT) || 587,
-  secure: false, // must be false for port 587
+  secure: process.env.SMTP_SECURE === 'true', // converts "false" to boolean false
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
 });
 
-// Optional: SendGrid Example (uncomment if using SendGrid)
-/*
-const transporter = nodemailer.createTransport({
-  service: 'SendGrid',
-  auth: {
-    user: 'apikey',
-    pass: process.env.SENDGRID_API_KEY
-  }
-});
-*/
-
+// Send OTP email
 async function sendOtpEmail(to, code) {
   try {
     const info = await transporter.sendMail({
@@ -57,7 +45,7 @@ async function sendOtpEmail(to, code) {
   }
 }
 
-// Send OTP endpoint
+// Endpoint to send OTP
 app.post('/send-code', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ ok: false, message: 'Email required' });
@@ -74,7 +62,7 @@ app.post('/send-code', async (req, res) => {
   }
 });
 
-// Verify OTP endpoint
+// Endpoint to verify OTP
 app.post('/verify-code', (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ ok: false, message: 'Email and code required' });
@@ -96,3 +84,4 @@ app.post('/verify-code', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
