@@ -10,7 +10,7 @@ app.use(bodyParser.json());
 // Serve frontend files (index.html etc.)
 app.use(express.static(path.join(__dirname)));
 
-// Store OTP codes in memory (for demo)
+// Store OTP codes in memory (demo)
 const codes = new Map();
 
 // Generate 6-digit OTP
@@ -18,17 +18,28 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Create transporter using Render environment variables
+// Create transporter with proper SSL and timeout
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_SECURE === 'true',
+  port: Number(process.env.SMTP_PORT),          // 465 for SSL
+  secure: process.env.SMTP_SECURE === 'true',   // true for port 465
   auth: {
     user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    pass: process.env.SMTP_PASS,                // App password
   },
-  logger: true,   // logs SMTP info to console
-  debug: true,    // shows detailed debug info
+  logger: true,      // logs SMTP info
+  debug: true,       // shows debug info
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+});
+
+// Verify transporter immediately (helpful to catch connection issues)
+transporter.verify((err, success) => {
+  if (err) {
+    console.error('SMTP connection failed:', err);
+  } else {
+    console.log('SMTP connection successful!');
+  }
 });
 
 // Temporary test route to check email sending
@@ -36,7 +47,7 @@ app.get('/test-email', async (req, res) => {
   try {
     const info = await transporter.sendMail({
       from: process.env.MAIL_FROM,
-      to: process.env.SMTP_USER, // send to yourself
+      to: process.env.SMTP_USER,
       subject: 'Render Test Email',
       text: 'This is a test email from your Render server.',
     });
