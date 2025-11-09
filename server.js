@@ -1,14 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer');
 const path = require('path');
+const sgMail = require('@sendgrid/mail');
 
 const app = express();
 app.use(bodyParser.json());
-
-// Serve frontend files (index.html etc.)
 app.use(express.static(path.join(__dirname)));
+
+// Initialize SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Store OTP codes in memory (demo)
 const codes = new Map();
@@ -18,40 +19,16 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Create transporter with proper SSL and timeout
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),          // 465 for SSL
-  secure: process.env.SMTP_SECURE === 'true',   // true for port 465
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,                // App password
-  },
-  logger: true,      // logs SMTP info
-  debug: true,       // shows debug info
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-});
-
-// Verify transporter immediately (helpful to catch connection issues)
-transporter.verify((err, success) => {
-  if (err) {
-    console.error('SMTP connection failed:', err);
-  } else {
-    console.log('SMTP connection successful!');
-  }
-});
-
 // Temporary test route to check email sending
 app.get('/test-email', async (req, res) => {
   try {
-    const info = await transporter.sendMail({
+    const msg = {
+      to: 'your-email@example.com', // replace with your email
       from: process.env.MAIL_FROM,
-      to: process.env.SMTP_USER,
-      subject: 'Render Test Email',
-      text: 'This is a test email from your Render server.',
-    });
-    console.log('Test email sent:', info.messageId);
+      subject: 'Render Test Email via SendGrid',
+      text: 'This is a test email sent using SendGrid from your Render server.',
+    };
+    await sgMail.send(msg);
     res.send('Test email sent! Check your inbox.');
   } catch (err) {
     console.error('Test email failed:', err);
@@ -62,14 +39,14 @@ app.get('/test-email', async (req, res) => {
 // Send OTP email
 async function sendOtpEmail(to, code) {
   try {
-    const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM,
+    const msg = {
       to,
+      from: process.env.MAIL_FROM,
       subject: 'Your verification code',
       text: `Your verification code is: ${code}. It expires in 5 minutes.`,
-    });
-    console.log('OTP email sent:', info.messageId);
-    return info;
+    };
+    await sgMail.send(msg);
+    console.log('OTP email sent to', to);
   } catch (err) {
     console.error('Failed to send OTP email:', err);
     throw err;
