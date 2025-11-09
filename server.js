@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
@@ -19,28 +20,47 @@ function generateCode() {
 
 // Create transporter using Render environment variables
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true', // converts "false" to boolean false
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: process.env.SMTP_SECURE === 'true',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  logger: true,   // logs SMTP info to console
+  debug: true,    // shows detailed debug info
+});
+
+// Temporary test route to check email sending
+app.get('/test-email', async (req, res) => {
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.MAIL_FROM,
+      to: process.env.SMTP_USER, // send to yourself
+      subject: 'Render Test Email',
+      text: 'This is a test email from your Render server.',
+    });
+    console.log('Test email sent:', info.messageId);
+    res.send('Test email sent! Check your inbox.');
+  } catch (err) {
+    console.error('Test email failed:', err);
+    res.status(500).send('Test email failed. Check logs.');
+  }
 });
 
 // Send OTP email
 async function sendOtpEmail(to, code) {
   try {
     const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
+      from: process.env.MAIL_FROM,
       to,
       subject: 'Your verification code',
       text: `Your verification code is: ${code}. It expires in 5 minutes.`,
     });
-    console.log('Email sent:', info.messageId);
+    console.log('OTP email sent:', info.messageId);
     return info;
   } catch (err) {
-    console.error('Failed to send email:', err);
+    console.error('Failed to send OTP email:', err);
     throw err;
   }
 }
@@ -84,4 +104,3 @@ app.post('/verify-code', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
