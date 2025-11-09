@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Register</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* small inline styles so it looks okay without css file */
+    .loginbox { max-width: 320px; padding: 20px; border-radius: 8px; background:#f7f7f7; }
+    .loginbox input { display:block; width:100%; margin:8px 0; padding:10px; box-sizing:border-box; }
+    #login { cursor:pointer; user-select:none; border-radius:8px; overflow:hidden; }
+    #verifySection { margin-top: 12px; }
+    .hint { font-size: 13px; color: #444; margin-top:8px; }
+  </style>
+</head>
+
+<body>
+  <center><img class="logo" src="logo.jpg" width="150" height="150" alt="logo"></center>
+
+  <center>
+    <div class="loginbox">
+      <input type="text" name="username" id="id" placeholder="Username.">
+      <input type="date" name="date" id="date">
+      <input type="email" name="email" id="mail" placeholder="Enter Email.">
+      <input type="password" name="password" id="pass" placeholder="Password.">
+      <input type="password" name="password2" id="pass2" placeholder="Confirm Password.">
+
+      <center>
+        <div id="login"
+             style="background-image: url('login1.png'); background-size: cover; height: 100px; width: 100px; display: flex; justify-content: center; align-items: center;">
+          <b>REGISTER</b>
+        </div>
+      </center>
+
+      <div id="verifySection" style="display:none; margin-top: 12px;">
+        <input id="code" placeholder="Enter verification code">
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:6px;">
+          <button id="verifyBtn">Verify</button>
+          <button id="resendBtn" type="button">Resend</button>
+        </div>
+        <div class="hint" id="verifyHint">Check your email for the 6-digit code.</div>
+      </div>
+
+      <div class="hint" id="status" style="margin-top:10px;"></div>
+
+      <div style="margin-top:10px;"><a href="login.html">login?</a></div>
+    </div>
+  </center>
+
+  <script>
+    // Elements
+    const login = document.getElementById('login'); // register button (div)
+    const verifySection = document.getElementById('verifySection');
+    const sendStatus = document.getElementById('status');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const resendBtn = document.getElementById('resendBtn');
+    const codeInput = document.getElementById('code');
+
+    // Temp store while waiting for verification
+    let pendingUser = null;
+    let resendCooldown = false;
+    const RESEND_SECONDS = 30;
+
+    // Helpers
+    function setStatus(text, isError = false) {
+      sendStatus.textContent = text;
+      sendStatus.style.color = isError ? 'crimson' : '#222';
+    }
+
+    function animateClick() {
+      login.style.backgroundImage = "url('login.png')";
+      login.style.transform = "scale(0.98)";
+      setTimeout(() => {
+        login.style.backgroundImage = "url('login1.png')";
+        login.style.transform = "scale(1)";
+      }, 500);
+    }
+
+    // Send OTP
+    async function sendCode(email) {
+      try {
+        setStatus('Sending code...');
+        const res = await fetch('/send-code', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setStatus('Code sent. Check your email.');
+          verifySection.style.display = 'block';
+          startResendCooldown();
+          return true;
+        } else {
+          setStatus('Error: ' + (data.message || 'Unable to send code'), true);
+          return false;
+        }
+      } catch (err) {
+        setStatus('Network error: ' + err.message, true);
+        return false;
+      }
+    }
+
+    // Verify OTP
+    async function verifyCode(email, code) {
+      try {
+        setStatus('Verifying...');
+        const res = await fetch('/verify-code', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ email, code })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setStatus('Verified! Saving account...');
+          return true;
+        } else {
+          setStatus('Error: ' + (data.message || 'Verification failed'), true);
+          return false;
+        }
+      } catch (err) {
+        setStatus('Network error: ' + err.message, true);
+        return false;
+      }
+    }
+
+    // Resend cooldown UI
+    function startResendCooldown() {
+      resendCooldown = true;
+      let sec = RESEND_SECONDS;
+      resendBtn.disabled = true;
+      resendBtn.textContent = 'Resend (' + sec + 's)';
+      const iv = setInterval(() => {
+        sec--;
+        if (sec <= 0) {
+          clearInterval(iv);
+          resendCooldown = false;
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend';
+        } else {
+          resendBtn.textContent = 'Resend (' + sec + 's)';
+        }
+      }, 1000);
+    }
+
+    // Click on REGISTER (sends code)
+    login.addEventListener('click', async () => {
+      // Get input values
+      const username = document.getElementById('id').value.trim();
+      const email = document.getElementById('mail').value.trim();
+      const date = document.getElementById('date').value.trim();
+      const password = document.getElementById('pass').value.trim();
+      const password2 = document.getElementById('pass2').value.trim();
+
+      // Check if any input is empty
+      if (!username || !email || !date || !password || !password2) {
+        alert("Please fill in all the blanks!");
+        return;
+      }
+
+      // Check if passwords match
+      if (password !== password2) {
+        alert("Passwords do not match!");
+        return;
+      }
+
+      // Save pending user in memory (do not store password permanently until verified)
+      pendingUser = { username, email, date, password };
+
+      // Send OTP to email
+      const ok = await sendCode(email);
+      if (ok) {
+        // animate button press feedback
+        login.style.backgroundImage = "url('login.png')";
+        setTimeout(() => {
+          login.style.backgroundImage = "url('login1.png')";
+        }, 500);
+      }
+    });
+
+    // Verify button
+    verifyBtn.addEventListener('click', async () => {
+      if (!pendingUser) {
+        setStatus('No pending registration. Click REGISTER first.', true);
+        return;
+      }
+      const code = codeInput.value.trim();
+      if (!code) return alert('Enter the verification code sent to your email.');
+
+      const ok = await verifyCode(pendingUser.email, code);
+      if (ok) {
+        // Save to localStorage
+        localStorage.setItem('username', pendingUser.username);
+        localStorage.setItem('email', pendingUser.email);
+        localStorage.setItem('date', pendingUser.date);
+        localStorage.setItem('password', pendingUser.password); // ⚠️ Not secure for real apps
+
+        // Clear pending data and UI
+        pendingUser = null;
+        verifySection.style.display = 'none';
+        codeInput.value = '';
+
+        // Button click animation
+        animateClick();
+
+        alert('Registration complete! Data saved locally.');
+        setStatus('Registration complete.');
+      }
+    });
+
+    // Resend button
+    resendBtn.addEventListener('click', async () => {
+      if (resendCooldown) return;
+      if (!pendingUser) {
+        setStatus('No pending registration. Click REGISTER first.', true);
+        return;
+      }
+      const ok = await sendCode(pendingUser.email);
+      if (ok) setStatus('Code resent. Check your email.');
+    });
+  </script>
+</body>
+</html>
