@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname)));
 // Initialize SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// Store OTP codes in memory (demo)
+// In-memory OTP storage (demo only)
 const codes = new Map();
 
 // Generate 6-digit OTP
@@ -19,41 +19,35 @@ function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Temporary test route to check email sending
-app.get('/test-email', async (req, res) => {
-  try {
-    const msg = {
-      to: 'your-email@example.com', // replace with your email
-      from: process.env.MAIL_FROM,
-      subject: 'Render Test Email via SendGrid',
-      text: 'This is a test email sent using SendGrid from your Render server.',
-    };
-    await sgMail.send(msg);
-    res.send('Test email sent! Check your inbox.');
-  } catch (err) {
-    console.error('Test email failed:', err);
-    res.status(500).send('Test email failed. Check logs.');
-  }
-});
-
 // Send OTP email
 async function sendOtpEmail(to, code) {
+  const msg = {
+    to,
+    from: process.env.MAIL_FROM, // Must be verified in SendGrid
+    subject: 'Your Verification Code',
+    text: `Your verification code is: ${code}. It expires in 5 minutes.`,
+    html: `<p>Your verification code is: <b>${code}</b></p><p>It expires in 5 minutes.</p>`,
+  };
   try {
-    const msg = {
-      to,
-      from: process.env.MAIL_FROM,
-      subject: 'Your verification code',
-      text: `Your verification code is: ${code}. It expires in 5 minutes.`,
-    };
     await sgMail.send(msg);
-    console.log('OTP email sent to', to);
+    console.log(`✅ OTP sent to ${to}`);
   } catch (err) {
-    console.error('Failed to send OTP email:', err);
+    console.error('❌ Failed to send OTP:', err.response ? err.response.body : err);
     throw err;
   }
 }
 
-// Endpoint to send OTP
+// Route to test email sending
+app.get('/test-email', async (req, res) => {
+  try {
+    await sendOtpEmail('your-email@example.com', '123456'); // Replace with your email
+    res.send('✅ Test email sent! Check your inbox.');
+  } catch (err) {
+    res.status(500).send('❌ Test email failed. Check server logs.');
+  }
+});
+
+// Endpoint to request OTP
 app.post('/send-code', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ ok: false, message: 'Email required' });
@@ -64,9 +58,9 @@ app.post('/send-code', async (req, res) => {
 
   try {
     await sendOtpEmail(email, code);
-    res.json({ ok: true, message: 'Code sent' });
-  } catch (err) {
-    res.status(500).json({ ok: false, message: 'Failed to send code' });
+    res.json({ ok: true, message: 'OTP sent' });
+  } catch {
+    res.status(500).json({ ok: false, message: 'Failed to send OTP' });
   }
 });
 
@@ -76,18 +70,26 @@ app.post('/verify-code', (req, res) => {
   if (!email || !code) return res.status(400).json({ ok: false, message: 'Email and code required' });
 
   const record = codes.get(email);
-  if (!record) return res.status(400).json({ ok: false, message: 'No code sent for this email' });
+  if (!record) return res.status(400).json({ ok: false, message: 'No OTP found for this email' });
 
   if (Date.now() > record.expires) {
     codes.delete(email);
-    return res.status(400).json({ ok: false, message: 'Code expired' });
+    return res.status(400).json({ ok: false, message: 'OTP expired' });
   }
 
-  if (record.code !== code) return res.status(400).json({ ok: false, message: 'Invalid code' });
+  if (record.code !== code) return res.status(400).json({ ok: false, message: 'Invalid OTP' });
 
   codes.delete(email);
-  res.json({ ok: true, message: 'Verified' });
+  res.json({ ok: true, message: '✅ Verified successfully' });
 });
+
+// Cleanup expired OTPs every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, { expires }] of codes) {
+    if (now > expires) codes.delete(email);
+  }
+}, 5 * 60 * 1000);
 
 // Start server
 const PORT = process.env.PORT || 3000;
