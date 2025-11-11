@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .loginbox { max-width: 320px; padding: 20px; border-radius: 8px; background:#f7f7f7; margin:50px auto; }
+    .loginbox input { display:block; width:100%; margin:8px 0; padding:10px; box-sizing:border-box; }
+    #loginBtn { cursor:pointer; user-select:none; border-radius:8px; padding:12px; background:#E1B3FF; border:none; font-weight:bold; }
+    #status { font-size: 14px; margin-top: 10px; }
+    a { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <center><img class="logo" src="Untitled7_20251109214228.jpg" width="150" height="150" alt="logo"></center>
+  <center>
+    <div class="loginbox">
+      <h2>Login</h2>
+      <input type="text" id="userInput" placeholder="Username or Email">
+      <input type="password" id="passwordInput" placeholder="Password">
+      <button id="loginBtn">LOGIN</button>
+      <div id="status"></div>
+      <div style="margin-top:10px;"><a href="registration.html">Register?</a></div>
+    </div>
+  </center>
+
+  <script>
+    const loginBtn = document.getElementById('loginBtn');
+    const statusDiv = document.getElementById('status');
+
+    function setStatus(text, isError = false) {
+      statusDiv.textContent = text;
+      statusDiv.style.color = isError ? 'crimson' : 'green';
+    }
+
+    loginBtn.addEventListener('click', () => {
+      const userInput = document.getElementById('userInput').value.trim();
+      const password = document.getElementById('passwordInput').value.trim();
+
+      if (!userInput || !password) {
+        setStatus('Please enter both username/email and password.', true);
+        return;
+      }
+
+      // Load saved credentials from localStorage
+      const savedUsername = localStorage.getItem('username');
+      const savedEmail = localStorage.getItem('email');
+      const savedPassword = localStorage.getItem('password');
+
+      if ((userInput === savedUsername || userInput === savedEmail) && password === savedPassword) {
+        setStatus('Login successful!');
+        // Redirect to profile page
+        window.location.href = 'profile.html';
+      } else {
+        setStatus('Incorrect username/email or password.', true);
+      }
+    });
+  </script>
+</body>
+</html>
