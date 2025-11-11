@@ -1,18 +1,57 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Register</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* small inline styles so it looks okay without css file */
-    .loginbox { max-width: 320px; padding: 20px; border-radius: 8px; background:#f7f7f7; }
-    .loginbox input { display:block; width:100%; margin:8px 0; padding:10px; box-sizing:border-box; }
-    #login { cursor:pointer; user-select:none; border-radius:8px; overflow:hidden; }
-    #verifySection { margin-top: 12px; }
-    .hint { font-size: 13px; color: #444; margin-top:8px; }
+    #gender-select {
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 100%;
+      margin-top: 5px;
+    }
+
+    #gender-select:focus {
+      outline: none;
+      border-color: #aaa;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .loginbox {
+      max-width: 320px;
+      padding: 20px;
+      border-radius: 8px;
+      background: #f7f7f7;
+    }
+
+    .loginbox input {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    #login {
+      cursor: pointer;
+      user-select: none;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #verifySection {
+      margin-top: 12px;
+    }
+
+    .hint {
+      font-size: 13px;
+      color: #444;
+      margin-top: 8px;
+    }
   </style>
 </head>
 
@@ -21,11 +60,18 @@
 
   <center>
     <div class="loginbox">
-      <input type="text" name="username" id="id" placeholder="Username.">
-      <input type="date" name="date" id="date">
-      <input type="email" name="email" id="mail" placeholder="Enter Email.">
-      <input type="password" name="password" id="pass" placeholder="Password.">
-      <input type="password" name="password2" id="pass2" placeholder="Confirm Password.">
+      <input type="text" id="id" placeholder="Username.">
+      <input type="date" id="date">
+      <input type="email" id="mail" placeholder="Enter Email.">
+      <input type="password" id="pass" placeholder="Password.">
+      <input type="password" id="pass2" placeholder="Confirm Password.">
+
+      <select id="gender-select">
+        <option value="">Select Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
 
       <center>
         <div id="login"
@@ -50,15 +96,14 @@
   </center>
 
   <script>
-    // Elements
-    const login = document.getElementById('login'); // register button (div)
+    const login = document.getElementById('login');
     const verifySection = document.getElementById('verifySection');
     const sendStatus = document.getElementById('status');
     const verifyBtn = document.getElementById('verifyBtn');
     const resendBtn = document.getElementById('resendBtn');
     const codeInput = document.getElementById('code');
+    const genderSelect = document.getElementById('gender-select');
 
-    // Temp store while waiting for verification
     let pendingUser = null;
     let resendCooldown = false;
     const RESEND_SECONDS = 30;
@@ -145,42 +190,32 @@
       }, 1000);
     }
 
-    // Click on REGISTER (sends code)
+    // REGISTER (send code)
     login.addEventListener('click', async () => {
-      // Get input values
       const username = document.getElementById('id').value.trim();
       const email = document.getElementById('mail').value.trim();
       const date = document.getElementById('date').value.trim();
       const password = document.getElementById('pass').value.trim();
       const password2 = document.getElementById('pass2').value.trim();
+      const gender = genderSelect.value.trim();
 
-      // Check if any input is empty
-      if (!username || !email || !date || !password || !password2) {
+      if (!username || !email || !date || !password || !password2 || !gender) {
         alert("Please fill in all the blanks!");
         return;
       }
 
-      // Check if passwords match
       if (password !== password2) {
         alert("Passwords do not match!");
         return;
       }
 
-      // Save pending user in memory (do not store password permanently until verified)
-      pendingUser = { username, email, date, password };
+      pendingUser = { username, email, date, password, gender };
 
-      // Send OTP to email
       const ok = await sendCode(email);
-      if (ok) {
-        // animate button press feedback
-        login.style.backgroundImage = "url('login.png')";
-        setTimeout(() => {
-          login.style.backgroundImage = "url('login1.png')";
-        }, 500);
-      }
+      if (ok) animateClick();
     });
 
-    // Verify button
+    // VERIFY OTP + SAVE ACCOUNT
     verifyBtn.addEventListener('click', async () => {
       if (!pendingUser) {
         setStatus('No pending registration. Click REGISTER first.', true);
@@ -189,28 +224,35 @@
       const code = codeInput.value.trim();
       if (!code) return alert('Enter the verification code sent to your email.');
 
-      const ok = await verifyCode(pendingUser.email, code);
-      if (ok) {
-        // Save to localStorage
-        localStorage.setItem('username', pendingUser.username);
-        localStorage.setItem('email', pendingUser.email);
-        localStorage.setItem('date', pendingUser.date);
-        localStorage.setItem('password', pendingUser.password); // ⚠️ Not secure for real apps
+      const verified = await verifyCode(pendingUser.email, code);
+      if (verified) {
+        try {
+          const res = await fetch('/save-account', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pendingUser)
+          });
+          const data = await res.json();
 
-        // Clear pending data and UI
-        pendingUser = null;
-        verifySection.style.display = 'none';
-        codeInput.value = '';
+          if (data.ok) {
+            animateClick();
+            alert('✅ Registration complete!');
+            setStatus('Registration complete.');
 
-        // Button click animation
-        animateClick();
-
-        alert('Registration complete! Data saved locally.');
-        setStatus('Registration complete.');
+            // Clear local temp
+            pendingUser = null;
+            verifySection.style.display = 'none';
+            codeInput.value = '';
+          } else {
+            setStatus('Error: ' + data.message, true);
+          }
+        } catch (err) {
+          setStatus('Network error: ' + err.message, true);
+        }
       }
     });
 
-    // Resend button
+    // RESEND
     resendBtn.addEventListener('click', async () => {
       if (resendCooldown) return;
       if (!pendingUser) {
@@ -222,4 +264,4 @@
     });
   </script>
 </body>
-</html>
+  </html>
