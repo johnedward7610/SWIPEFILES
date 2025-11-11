@@ -5,26 +5,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>User Profile</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .profilebox {
+      margin-top: 150px;
+      display: flex;
+      flex-direction: column;
+      font-weight: bold;
+    }
+    .postbody {
+      padding: 20px;
+      border-radius: 20px;
+      background: white;
+      min-height: 50vh;
+    }
+    button {
+      background: #E1B3FF;
+      border-radius: 20px;
+      border: none;
+      padding: 20px;
+      box-shadow: 0px 10px 10px 0px #00000059;
+      transition: 0.5s;
+      cursor: pointer;
+    }
+    button:hover {
+      box-shadow: none;
+    }
+    input {
+      padding: 15px;
+      text-align: start;
+      color: black;
+      width: 80%;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+    #posts div {
+      margin-bottom: 15px;
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+    }
+  </style>
 </head>
 
 <body>
-  <div class="profile-box">
-    <h2>User Profile</h2>
-   <center>
-     <div class="info">👤 Username: <a id="username-link" href="#">Loading...</a></div>
- <div class="info">🎂 Date of Birth: <a id="date-link" href="#">Loading...</a></div>
- <div class="info">⚧ Gender: <a id="gender-link" href="#">Loading...</a></div>
-   </center>
+  <div>
+    <h2><a href="homepage.html">User Profile</a></h2>
+    <div class="profilebox">
+      <center>
+        <img src="" alt="" />
+        <div class="info">Username: <a id="username-link" href="#">Loading...</a></div>
+        <div class="info">Date of Birth: <a id="date-link" href="#">Loading...</a></div>
+        <div class="info">Gender: <a id="gender-link" href="#">Loading...</a></div>
+      </center>
+    </div>
     <button onclick="logout()">Logout</button>
+
+    <div class="postbody">
+      <center><p style="opacity: 0.5;">KEEP IT FRIENDLY</p></center>
+      <input type="text" id="Inputpost" placeholder="Write something...">
+      <button id="postButton"><b>POST</b></button>
+      <div id="posts"></div>
+    </div>
   </div>
 
   <script>
-    // --- Load saved data ---
+    // --- Load saved user data ---
     const username = localStorage.getItem('username');
     const date = localStorage.getItem('date');
     const gender = localStorage.getItem('gender');
 
-    // Display info or fallback
     const uLink = document.getElementById('username-link');
     const dLink = document.getElementById('date-link');
     const gLink = document.getElementById('gender-link');
@@ -32,36 +81,70 @@
     if (username) {
       uLink.textContent = username;
       uLink.href = `profile.html?username=${encodeURIComponent(username)}`;
-    } else {
-      uLink.textContent = 'Not set';
-    }
+    } else uLink.textContent = 'Not set';
 
     if (date) {
       dLink.textContent = date;
       dLink.href = `profile.html?date=${encodeURIComponent(date)}`;
-    } else {
-      dLink.textContent = 'Not set';
-    }
+    } else dLink.textContent = 'Not set';
 
     if (gender) {
       gLink.textContent = gender;
       gLink.href = `profile.html?gender=${encodeURIComponent(gender)}`;
-    } else {
-      gLink.textContent = 'Not set';
-    }
+    } else gLink.textContent = 'Not set';
 
-    // --- Logout clears stored data ---
+    // --- Logout ---
     function logout() {
       localStorage.clear();
       window.location.href = 'registration.html';
     }
 
-    // --- Optional: show URL params if linked ---
+    // --- Determine profile being viewed ---
     const params = new URLSearchParams(window.location.search);
-    const showParam = params.toString();
-    if (showParam) {
-      alert(`You clicked a link with: ${showParam}`);
+    const profileUsername = params.get('username') || username; // default to self
+
+    // --- Post functionality ---
+    const postInput = document.getElementById('Inputpost');
+    const postButton = document.getElementById('postButton');
+
+    async function loadPosts() {
+      try {
+        const res = await fetch('/api/posts');
+        const posts = await res.json();
+        const userPosts = posts.filter(p => p.username === profileUsername);
+
+        const postsDiv = document.getElementById('posts');
+        postsDiv.innerHTML = '';
+        userPosts.forEach(p => {
+          const div = document.createElement('div');
+          div.innerHTML = `<p><b>${p.username}</b> <span style="opacity:0.6;">(${p.time})</span></p>
+                           <p>${p.content}</p>`;
+          postsDiv.appendChild(div);
+        });
+      } catch (err) {
+        console.error("Failed to load posts:", err);
+      }
     }
+
+    postButton.addEventListener('click', async () => {
+      const content = postInput.value.trim();
+      if (!content) return alert('Please write something before posting.');
+
+      try {
+        await fetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, content })
+        });
+        postInput.value = '';
+        loadPosts();
+      } catch (err) {
+        console.error("Failed to post:", err);
+      }
+    });
+
+    // --- Load posts on page load ---
+    loadPosts();
   </script>
 </body>
 </html>
