@@ -9,25 +9,45 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname)));
 
-// Initialize SendGrid
+// --- SendGrid setup ---
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
-// In-memory OTP storage (demo)
+// --- In-memory OTP storage ---
 const codes = new Map();
+
+// --- Files ---
 const USERS_FILE = path.join(__dirname, 'users.json');
+const POSTS_FILE = path.join(__dirname, 'posts.json');
 
-// === Helper functions ===
+// --- Helper functions ---
+// Load/save users
+function loadUsers() {
+  if (!fs.existsSync(USERS_FILE)) return [];
+  return JSON.parse(fs.readFileSync(USERS_FILE));
+}
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
 
-// Generate random 6-digit OTP
+// Load/save posts
+function loadPosts() {
+  if (!fs.existsSync(POSTS_FILE)) return [];
+  return JSON.parse(fs.readFileSync(POSTS_FILE));
+}
+function savePosts(posts) {
+  fs.writeFileSync(POSTS_FILE, JSON.stringify(posts, null, 2));
+}
+
+// Generate OTP
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP email via SendGrid
+// Send OTP email
 async function sendOtpEmail(to, code) {
   const msg = {
     to,
-    from: process.env.MAIL_FROM, // Must be verified sender in SendGrid
+    from: process.env.MAIL_FROM,
     subject: 'Your Verification Code',
     text: `Your verification code is: ${code}. It expires in 5 minutes.`,
     html: `<p>Your verification code is: <b>${code}</b></p><p>It expires in 5 minutes.</p>`,
@@ -41,24 +61,15 @@ async function sendOtpEmail(to, code) {
   }
 }
 
-// Load and save user accounts
-function loadUsers() {
-  if (!fs.existsSync(USERS_FILE)) return [];
-  return JSON.parse(fs.readFileSync(USERS_FILE));
-}
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
+// --- Routes ---
 
-// === ROUTES ===
-
-// 1️⃣ Send OTP to email
+// 1️⃣ Send OTP
 app.post('/send-code', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ ok: false, message: 'Email required' });
 
   const code = generateCode();
-  const expires = Date.now() + 5 * 60 * 1000; // 5 minutes
+  const expires = Date.now() + 5 * 60 * 1000; // 5 min
   codes.set(email, { code, expires });
 
   try {
@@ -100,14 +111,7 @@ app.post('/save-account', (req, res) => {
     return res.json({ ok: false, message: 'Email already registered' });
   }
 
-  users.push({
-    username,
-    email,
-    password, // ⚠️ Plain text for demo. Use bcrypt in production!
-    date,
-    gender,
-    createdAt: new Date(),
-  });
+  users.push({ username, email, password, date, gender, createdAt: new Date() });
   saveUsers(users);
 
   console.log(`✅ User saved: ${username} (${email})`);
@@ -117,26 +121,44 @@ app.post('/save-account', (req, res) => {
 // 4️⃣ Login route
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ ok: false, message: 'Email and password required' });
-  }
+  if (!email || !password) return res.status(400).json({ ok: false, message: 'Email and password required' });
 
   const users = loadUsers();
   const user = users.find(u => u.email === email);
 
-  if (!user) {
-    return res.json({ ok: false, message: 'No account found with this email.' });
-  }
-
-  if (user.password !== password) {
-    return res.json({ ok: false, message: 'Incorrect password.' });
-  }
+  if (!user) return res.json({ ok: false, message: 'No account found with this email.' });
+  if (user.password !== password) return res.json({ ok: false, message: 'Incorrect password.' });
 
   console.log(`✅ ${user.username} logged in`);
   res.json({ ok: true, message: 'Login successful!', user });
 });
 
-// 🧹 Auto cleanup expired OTPs every 5 minutes
+// 5️⃣ Posts API
+// Get all posts
+app.get('/api/posts', (req, res) => {
+  const posts = loadPosts();
+  res.json(posts);
+});
+
+// Add a post
+app.post('/api/posts', (req, res) => {
+  const { username, content } = req.body;
+  if (!username || !content) return res.status(400).json({ ok: false, message: 'Missing username or content' });
+
+  const posts = loadPosts();
+  const newPost = {
+    id: Date.now(),
+    username,
+    content,
+    time: new Date().toLocaleString()
+  };
+  posts.unshift(newPost);
+  savePosts(posts);
+
+  res.json({ ok: true, post: newPost });
+});
+
+// --- Cleanup expired OTPs ---
 setInterval(() => {
   const now = Date.now();
   for (const [email, { expires }] of codes) {
@@ -144,6 +166,6 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// ✅ Start the server
+// --- Start server ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
