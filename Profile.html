@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>User Profile</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="profile-box">
+    <h2>User Profile</h2>
+   <center>
+     <div class="info">👤 Username: <a id="username-link" href="#">Loading...</a></div>
+ <div class="info">🎂 Date of Birth: <a id="date-link" href="#">Loading...</a></div>
+ <div class="info">⚧ Gender: <a id="gender-link" href="#">Loading...</a></div>
+   </center>
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <script>
+    // --- Load saved data ---
+    const username = localStorage.getItem('username');
+    const date = localStorage.getItem('date');
+    const gender = localStorage.getItem('gender');
+
+    // Display info or fallback
+    const uLink = document.getElementById('username-link');
+    const dLink = document.getElementById('date-link');
+    const gLink = document.getElementById('gender-link');
+
+    if (username) {
+      uLink.textContent = username;
+      uLink.href = `profile.html?username=${encodeURIComponent(username)}`;
+    } else {
+      uLink.textContent = 'Not set';
+    }
+
+    if (date) {
+      dLink.textContent = date;
+      dLink.href = `profile.html?date=${encodeURIComponent(date)}`;
+    } else {
+      dLink.textContent = 'Not set';
+    }
+
+    if (gender) {
+      gLink.textContent = gender;
+      gLink.href = `profile.html?gender=${encodeURIComponent(gender)}`;
+    } else {
+      gLink.textContent = 'Not set';
+    }
+
+    // --- Logout clears stored data ---
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'registration.html';
+    }
+
+    // --- Optional: show URL params if linked ---
+    const params = new URLSearchParams(window.location.search);
+    const showParam = params.toString();
+    if (showParam) {
+      alert(`You clicked a link with: ${showParam}`);
+    }
+  </script>
+</body>
+</html>
